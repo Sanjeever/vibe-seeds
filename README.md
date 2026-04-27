@@ -2,6 +2,10 @@
 
 把模糊感觉变成可执行的小产品灵感。
 
+## 截图
+
+![Overview](assets/screenshot/overview.png)
+
 ## 技术栈
 
 - pnpm monorepo
