@@ -6,7 +6,9 @@
     "dev": "concurrently -n api,web -c magenta,cyan \"pnpm --filter @vibe-seeds/api dev\" \"pnpm --filter @vibe-seeds/web dev\"",
     "build": "pnpm -r build",
     "typecheck": "pnpm --filter @vibe-seeds/shared build && pnpm -r typecheck",
-    "lint": "pnpm typecheck"
+    "lint": "pnpm typecheck",
+    "sync:versions": "node scripts/sync-package-versions.mjs",
+    "version": "node scripts/sync-package-versions.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
