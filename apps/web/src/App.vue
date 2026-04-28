@@ -45,7 +45,7 @@ async function createSeed() {
 
   try {
     const seed = await createSeedRequest(text);
-    seeds.value = [seed, ...seeds.value.filter((item) => item.id !== seed.id)];
+    seeds.value.unshift(seed);
     vibe.value = "";
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "生成 seed 失败";

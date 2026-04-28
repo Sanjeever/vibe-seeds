@@ -120,8 +120,10 @@ function readRequiredString(record: Record<string, unknown>, key: string, maxLen
     throw new Error(`AI JSON 字段 ${key} 不能为空。`);
   }
 
-  if (maxLength && Array.from(trimmed).length > maxLength) {
-    return Array.from(trimmed).slice(0, maxLength).join("");
+  const chars = Array.from(trimmed);
+
+  if (maxLength && chars.length > maxLength) {
+    return chars.slice(0, maxLength).join("");
   }
 
   return trimmed;

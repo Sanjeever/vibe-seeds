@@ -1,7 +1,8 @@
 import type { Seed, SeedDraft } from "@vibe-seeds/shared";
 import { getAiConfig } from "../config/env.js";
 import { generateSeedWithAI } from "./aiClient.js";
-import { calculateSeedScore, createFallbackSeedFromVibe } from "./fallbackSeedGenerator.js";
+import { calculateSeedScore } from "../utils/score.js";
+import { createFallbackSeedFromVibe } from "./fallbackSeedGenerator.js";
 
 export async function createSeed(vibe: string): Promise<Seed> {
   const config = getAiConfig();

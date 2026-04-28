@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import type { Seed } from "@vibe-seeds/shared";
 import { dataDir, seedsPath } from "./config/paths.js";
-import { calculateSeedScore } from "./services/fallbackSeedGenerator.js";
+import { calculateSeedScore } from "./utils/score.js";
 
 let writeQueue = Promise.resolve();
 let seedsCache: Seed[] | null = null;

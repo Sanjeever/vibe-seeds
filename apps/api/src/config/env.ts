@@ -48,10 +48,16 @@ export function loadRootEnv() {
   }
 }
 
+let cachedConfig: AiConfig | null = null;
+
 export function getAiConfig(): AiConfig {
+  if (cachedConfig !== null) {
+    return cachedConfig;
+  }
+
   loadRootEnv();
 
-  return {
+  cachedConfig = {
     apiBaseUrl: trimTrailingSlash(process.env.AI_API_BASE_URL?.trim() || "https://api.openai.com/v1"),
     apiKey: cleanOptional(process.env.AI_API_KEY),
     model: cleanOptional(process.env.AI_MODEL),
@@ -59,6 +65,8 @@ export function getAiConfig(): AiConfig {
     timeoutMs: Math.max(1000, Math.round(parseNumber(process.env.AI_TIMEOUT_MS, 30000))),
     enableFallback: parseBoolean(process.env.AI_ENABLE_FALLBACK, true)
   };
+
+  return cachedConfig;
 }
 
 export function validateAiConfigOnStartup() {
