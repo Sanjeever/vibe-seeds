@@ -40,6 +40,11 @@ app.post("/api/seeds", async (request, response, next) => {
       return;
     }
 
+    if (vibe.length > 500) {
+      response.status(400).json({ message: "Vibe 描述不能超过 500 个字符。" });
+      return;
+    }
+
     const seed = await createSeed(vibe);
     const savedSeed = await addSeed(seed);
     response.status(201).json(savedSeed);

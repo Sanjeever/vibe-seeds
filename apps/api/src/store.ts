@@ -4,31 +4,38 @@ import { dataDir, seedsPath } from "./config/paths.js";
 import { calculateSeedScore } from "./services/fallbackSeedGenerator.js";
 
 let writeQueue = Promise.resolve();
+let seedsCache: Seed[] | null = null;
 
 export async function getSeeds(): Promise<Seed[]> {
-  await ensureDataFile();
-  return readSeedsFile();
+  if (seedsCache !== null) {
+    return seedsCache;
+  }
+
+  seedsCache = await readSeedsFile();
+  return seedsCache;
 }
 
 export async function addSeed(seed: Seed): Promise<Seed> {
   return withWriteLock(async () => {
-    const seeds = await readSeedsFile();
-    seeds.unshift(seed);
-    await writeSeedsFile(seeds);
+    const seeds = await getSeeds();
+    const next = [seed, ...seeds];
+    await writeSeedsFile(next);
+    seedsCache = next;
     return seed;
   });
 }
 
 export async function deleteSeed(id: string): Promise<boolean> {
   return withWriteLock(async () => {
-    const seeds = await readSeedsFile();
-    const nextSeeds = seeds.filter((seed) => seed.id !== id);
+    const seeds = await getSeeds();
+    const next = seeds.filter((seed) => seed.id !== id);
 
-    if (nextSeeds.length === seeds.length) {
+    if (next.length === seeds.length) {
       return false;
     }
 
-    await writeSeedsFile(nextSeeds);
+    await writeSeedsFile(next);
+    seedsCache = next;
     return true;
   });
 }
