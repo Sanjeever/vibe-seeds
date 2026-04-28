@@ -58,7 +58,7 @@ export function getAiConfig(): AiConfig {
     apiBaseUrl: trimTrailingSlash(process.env.AI_API_BASE_URL?.trim() || "https://api.openai.com/v1"),
     apiKey: cleanOptional(process.env.AI_API_KEY),
     model: cleanOptional(process.env.AI_MODEL),
-    temperature: parseNumber(process.env.AI_TEMPERATURE, 0.8),
+    temperature: parseNumber(process.env.AI_TEMPERATURE, 1),
     timeoutMs: Math.max(1000, Math.round(parseNumber(process.env.AI_TIMEOUT_MS, 30000))),
     enableFallback: parseBoolean(process.env.AI_ENABLE_FALLBACK, true)
   };
