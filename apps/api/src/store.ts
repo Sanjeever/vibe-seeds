@@ -1,14 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Seed } from "@vibe-seeds/shared";
+import { dataDir, seedsPath } from "./config/paths.js";
 import { calculateSeedScore } from "./services/fallbackSeedGenerator.js";
-
-const currentFile = fileURLToPath(import.meta.url);
-const currentDir = path.dirname(currentFile);
-const rootDir = path.resolve(currentDir, "../../..");
-const dataDir = path.join(rootDir, "data");
-const seedsPath = path.join(dataDir, "seeds.json");
 
 let writeQueue = Promise.resolve();
 
@@ -102,18 +95,67 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
 }
 
 function normalizeSeed(value: unknown): Seed | null {
-  if (!value || typeof value !== "object") {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
 
-  const seed = value as Seed;
-  const sourceVibe = typeof seed.sourceVibe === "string" ? seed.sourceVibe : "";
-  const score = typeof seed.score === "number" && Number.isFinite(seed.score) ? seed.score : calculateSeedScore(sourceVibe);
-  const source = seed.source === "ai" || seed.source === "fallback" ? seed.source : undefined;
+  const record = value as Record<string, unknown>;
+  const id = readString(record, "id");
+  const projectName = readString(record, "projectName");
+  const concept = readString(record, "concept");
+  const targetUsers = readString(record, "targetUsers");
+  const coreFeatures = readStringArray(record, "coreFeatures");
+  const techDirection = readStringArray(record, "techDirection");
+  const followUpPrompt = readString(record, "followUpPrompt");
+  const tags = readStringArray(record, "tags");
+  const sourceVibe = readString(record, "sourceVibe") ?? "";
+  const createdAt = readString(record, "createdAt");
+
+  if (
+    !id ||
+    !projectName ||
+    !concept ||
+    !targetUsers ||
+    !followUpPrompt ||
+    !createdAt ||
+    !coreFeatures ||
+    !techDirection ||
+    !tags
+  ) {
+    return null;
+  }
+
+  const rawScore = record.score;
+  const score = typeof rawScore === "number" && Number.isFinite(rawScore) ? rawScore : calculateSeedScore(sourceVibe);
+  const source = record.source === "ai" || record.source === "fallback" ? record.source : undefined;
 
   return {
-    ...seed,
+    id,
+    projectName,
+    concept,
+    targetUsers,
+    coreFeatures,
+    techDirection,
+    followUpPrompt,
+    tags,
     source,
+    sourceVibe,
+    createdAt,
     score: Math.max(1, Math.min(100, Math.round(score)))
   };
+}
+
+function readString(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function readStringArray(record: Record<string, unknown>, key: string): string[] | null {
+  const value = record[key];
+
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
 }

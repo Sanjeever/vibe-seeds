@@ -1,10 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { rootDir } from "./paths.js";
 
-const currentFile = fileURLToPath(import.meta.url);
-const currentDir = path.dirname(currentFile);
-const rootDir = path.resolve(currentDir, "../../../..");
 const envPath = path.join(rootDir, ".env");
 
 let isLoaded = false;

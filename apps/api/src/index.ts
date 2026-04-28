@@ -1,9 +1,8 @@
 import cors from "cors";
 import express from "express";
-import type { CreateSeedInput, Seed, SeedDraft } from "@vibe-seeds/shared";
-import { getAiConfig, validateAiConfigOnStartup } from "./config/env.js";
-import { generateSeedWithAI } from "./services/aiClient.js";
-import { calculateSeedScore, createFallbackSeedFromVibe } from "./services/fallbackSeedGenerator.js";
+import type { CreateSeedInput } from "@vibe-seeds/shared";
+import { validateAiConfigOnStartup } from "./config/env.js";
+import { createSeed, isAiGenerationError } from "./services/seedService.js";
 import { addSeed, deleteSeed, getSeeds } from "./store.js";
 
 const app = express();
@@ -79,47 +78,3 @@ app.use((error: unknown, _request: express.Request, response: express.Response, 
 app.listen(port, () => {
   console.log(`Vibe Seeds API is running at http://localhost:${port}`);
 });
-
-async function createSeed(vibe: string): Promise<Seed> {
-  const config = getAiConfig();
-
-  try {
-    const draft = await generateSeedWithAI(vibe);
-    return createSeedFromDraft(vibe, draft);
-  } catch (error) {
-    console.error("AI seed generation failed:", error instanceof Error ? error.message : error);
-
-    if (config.enableFallback) {
-      return createFallbackSeedFromVibe(vibe);
-    }
-
-    throw new AiGenerationError();
-  }
-}
-
-function createSeedFromDraft(vibe: string, draft: SeedDraft): Seed {
-  return {
-    id: crypto.randomUUID(),
-    projectName: draft.title,
-    concept: draft.concept,
-    targetUsers: draft.targetUser,
-    coreFeatures: draft.features,
-    techDirection: draft.techDirection,
-    followUpPrompt: draft.followUpPrompt,
-    tags: draft.tags,
-    score: calculateSeedScore(vibe),
-    source: "ai",
-    sourceVibe: vibe,
-    createdAt: new Date().toISOString()
-  };
-}
-
-class AiGenerationError extends Error {
-  constructor() {
-    super("AI generation failed");
-  }
-}
-
-function isAiGenerationError(error: unknown): error is AiGenerationError {
-  return error instanceof AiGenerationError;
-}
