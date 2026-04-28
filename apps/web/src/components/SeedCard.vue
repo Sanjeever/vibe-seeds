@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import type { Seed } from "@vibe-seeds/shared";
 import { formatSeedTime, normalizeScore } from "../utils/seeds";
 
@@ -9,6 +10,14 @@ defineProps<{
 const emit = defineEmits<{
   remove: [seedId: string];
 }>();
+
+const copied = ref(false);
+
+async function copyPrompt(text: string) {
+  await navigator.clipboard.writeText(text);
+  copied.value = true;
+  setTimeout(() => { copied.value = false; }, 2000);
+}
 </script>
 
 <template>
@@ -71,7 +80,16 @@ const emit = defineEmits<{
       </section>
 
       <section>
-        <h4 class="text-sm text-stone-500">后续 prompt</h4>
+        <div class="flex items-center justify-between gap-3">
+          <h4 class="text-sm text-stone-500">后续 prompt</h4>
+          <button
+            class="text-xs text-stone-400 underline decoration-stone-300 underline-offset-4 transition hover:text-stone-900 hover:decoration-stone-900"
+            type="button"
+            @click="copyPrompt(seed.followUpPrompt)"
+          >
+            {{ copied ? "已复制" : "复制" }}
+          </button>
+        </div>
         <p class="mt-2 border border-stone-200 bg-stone-50 p-4 text-sm leading-relaxed text-stone-700">
           {{ seed.followUpPrompt }}
         </p>
