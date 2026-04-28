@@ -6,3 +6,9 @@ dist/
 *.tsbuildinfo
 apps/**/dist/
 packages/**/dist/
+
+# TypeScript/vue-tsc emit artifacts should not live beside source files.
+apps/web/src/**/*.js
+apps/web/src/**/*.d.ts
+apps/web/vite.config.js
+apps/web/vite.config.d.ts
