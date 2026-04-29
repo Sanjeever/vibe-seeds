@@ -1,4 +1,4 @@
-import type { Exploration, ExplorationDimension, Seed } from "@vibe-seeds/shared";
+import type { Exploration, ExplorationDimension, Seed, SceneType } from "@vibe-seeds/shared";
 
 interface ErrorPayload {
   message?: string;
@@ -19,13 +19,13 @@ export async function fetchSeeds() {
   return (await response.json()) as Seed[];
 }
 
-export async function createSeed(vibe: string) {
+export async function createSeed(vibe: string, scene?: SceneType) {
   const response = await fetch("/api/seeds", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ vibe })
+    body: JSON.stringify({ vibe, scene })
   });
 
   if (!response.ok) {

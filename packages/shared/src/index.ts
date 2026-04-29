@@ -1,5 +1,7 @@
 export type ExplorationDimension = "mvp" | "tech" | "competitor" | "validation" | "custom";
 
+export type SceneType = "indie-tool" | "mobile" | "chrome-extension" | "ai-app";
+
 export interface Exploration {
   id: string;
   dimension: ExplorationDimension;
@@ -19,6 +21,7 @@ export interface Seed {
   tags: string[];
   score: number;
   source?: "ai" | "fallback";
+  scene?: SceneType;
   sourceVibe: string;
   createdAt: string;
   explorations: Exploration[];
@@ -27,6 +30,7 @@ export interface Seed {
 
 export interface CreateSeedInput {
   vibe: string;
+  scene?: SceneType;
 }
 
 export interface SeedDraft {

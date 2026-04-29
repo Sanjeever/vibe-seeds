@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import type { Exploration, Seed } from "@vibe-seeds/shared";
+import type { Exploration, Seed, SceneType } from "@vibe-seeds/shared";
 import { createSeed as createSeedRequest, deleteSeed, fetchSeeds } from "../api/seeds";
 import ExploreDrawer from "../components/ExploreDrawer.vue";
 import SeedCard from "../components/SeedCard.vue";
-import { examplePrompts } from "../constants/example-prompts";
+import { getExamplePrompts } from "../constants/example-prompts";
 import { sortSeeds, type SeedSortMode } from "../utils/seeds";
 
 const vibe = ref("");
@@ -15,6 +15,16 @@ const errorMessage = ref("");
 const sortMode = ref<SeedSortMode>("createdAt");
 const searchQuery = ref("");
 const selectedTags = ref<string[]>([]);
+const selectedScene = ref<SceneType | undefined>(undefined);
+
+const scenes: { type: SceneType; label: string; icon: string }[] = [
+  { type: "indie-tool", label: "独立开发者工具", icon: "🛠" },
+  { type: "mobile", label: "移动端小产品", icon: "📱" },
+  { type: "chrome-extension", label: "Chrome 插件", icon: "🌐" },
+  { type: "ai-app", label: "AI 应用", icon: "💬" }
+];
+
+const examplePrompts = computed(() => getExamplePrompts(selectedScene.value));
 
 const canSubmit = computed(() => vibe.value.trim().length >= 2 && !isCreating.value);
 const sortedSeeds = computed(() => sortSeeds(seeds.value, sortMode.value));
@@ -95,7 +105,7 @@ async function createSeed() {
   errorMessage.value = "";
 
   try {
-    const seed = await createSeedRequest(text);
+    const seed = await createSeedRequest(text, selectedScene.value);
     seeds.value.unshift(seed);
     vibe.value = "";
   } catch (error) {
@@ -116,6 +126,11 @@ async function removeSeed(seedId: string) {
     seeds.value = previousSeeds;
     errorMessage.value = error instanceof Error ? error.message : "删除 seed 失败";
   }
+}
+
+function toggleScene(scene: SceneType) {
+  selectedScene.value = selectedScene.value === scene ? undefined : scene;
+  vibe.value = "";
 }
 
 function setExamplePrompt(prompt: string) {
@@ -165,6 +180,27 @@ function handleShareUpdated(updatedSeed: Seed) {
       </header>
 
       <form class="border-b border-stone-200 pb-12" @submit.prevent="createSeed">
+        <div class="mb-6">
+          <p class="mb-3 text-sm text-stone-500">选择场景（可选）</p>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="scene in scenes"
+              :key="scene.type"
+              class="inline-flex items-center gap-1.5 border px-3 py-1.5 text-sm transition"
+              :class="
+                selectedScene === scene.type
+                  ? 'border-stone-900 bg-stone-900 text-stone-50'
+                  : 'border-stone-300 text-stone-600 hover:border-stone-600 hover:text-stone-900'
+              "
+              type="button"
+              @click="toggleScene(scene.type)"
+            >
+              <span>{{ scene.icon }}</span>
+              <span>{{ scene.label }}</span>
+            </button>
+          </div>
+        </div>
+
         <label class="sr-only" for="vibe-input">描述一个 vibe</label>
         <textarea
           id="vibe-input"

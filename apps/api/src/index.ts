@@ -1,6 +1,6 @@
 import cors from "cors";
 import express from "express";
-import type { CreateSeedInput, ExplorationDimension } from "@vibe-seeds/shared";
+import type { CreateSeedInput, ExplorationDimension, SceneType } from "@vibe-seeds/shared";
 import { validateAiConfigOnStartup } from "./config/env.js";
 import { buildExplorationMeta, generateExploration, streamExplorationContent } from "./services/explorationService.js";
 import { isAiGenerationError, createSeed } from "./services/seedService.js";
@@ -46,7 +46,11 @@ app.post("/api/seeds", async (request, response, next) => {
       return;
     }
 
-    const seed = await createSeed(vibe);
+    const validScenes = new Set<SceneType>(["indie-tool", "mobile", "chrome-extension", "ai-app"]);
+    const rawScene = body.scene;
+    const scene = typeof rawScene === "string" && validScenes.has(rawScene as SceneType) ? (rawScene as SceneType) : undefined;
+
+    const seed = await createSeed(vibe, scene);
     const savedSeed = await addSeed(seed);
     response.status(201).json(savedSeed);
   } catch (error) {

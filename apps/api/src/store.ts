@@ -1,5 +1,5 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import type { Exploration, Seed } from "@vibe-seeds/shared";
+import type { Exploration, Seed, SceneType } from "@vibe-seeds/shared";
 import { dataDir, seedsPath } from "./config/paths.js";
 import { calculateSeedScore } from "./utils/score.js";
 
@@ -201,6 +201,8 @@ function normalizeSeed(value: unknown): Seed | null {
   const rawScore = record.score;
   const score = typeof rawScore === "number" && Number.isFinite(rawScore) ? rawScore : calculateSeedScore(sourceVibe);
   const source = record.source === "ai" || record.source === "fallback" ? record.source : undefined;
+  const validScenes = new Set<SceneType>(["indie-tool", "mobile", "chrome-extension", "ai-app"]);
+  const scene = typeof record.scene === "string" && validScenes.has(record.scene as SceneType) ? (record.scene as SceneType) : undefined;
   const explorations = normalizeExplorations(record.explorations);
   const shareId = typeof record.shareId === "string" && record.shareId.trim() ? record.shareId : undefined;
 
@@ -214,6 +216,7 @@ function normalizeSeed(value: unknown): Seed | null {
     followUpPrompt,
     tags,
     source,
+    scene,
     sourceVibe,
     createdAt,
     score: Math.max(1, Math.min(100, Math.round(score))),
