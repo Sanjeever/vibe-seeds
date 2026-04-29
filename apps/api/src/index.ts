@@ -192,6 +192,7 @@ app.post("/api/seeds/:id/explore/stream", async (request, response, next) => {
       if (!response.writableEnded) {
         send({ type: "error", message: "AI 生成失败，请稍后重试。" });
         response.end();
+
       }
       return;
     }
@@ -259,6 +260,10 @@ app.use((error: unknown, _request: express.Request, response: express.Response, 
   });
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Vibe Seeds API is running at http://localhost:${port}`);
 });
+
+const shutdown = () => server.close(() => process.exit(0));
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
