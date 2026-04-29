@@ -1,10 +1,9 @@
-import { readFileSync } from "node:fs";
+import dotenv from "dotenv";
 import path from "node:path";
+import { z } from "zod";
 import { rootDir } from "./paths.js";
 
-const envPath = path.join(rootDir, ".env");
-
-let isLoaded = false;
+dotenv.config({ path: path.join(rootDir, ".env") });
 
 export interface AiConfig {
   apiBaseUrl: string;
@@ -19,51 +18,39 @@ export function getRootDir() {
   return rootDir;
 }
 
-export function loadRootEnv() {
-  if (isLoaded) {
-    return;
-  }
+const envSchema = z.object({
+  AI_API_BASE_URL: z.string().default("https://api.openai.com/v1"),
+  AI_API_KEY: z.string().optional(),
+  AI_MODEL: z.string().optional(),
+  AI_TEMPERATURE: z.coerce.number().default(1),
+  AI_TIMEOUT_MS: z.coerce.number().min(1000).default(120000),
+  AI_ENABLE_FALLBACK: z
+    .string()
+    .default("true")
+    .transform((v) => !["false", "0", "no", "off"].includes(v.trim().toLowerCase())),
+});
 
-  isLoaded = true;
+const PLACEHOLDER_VALUES = new Set(["your_api_key_here", "your_model_name_here"]);
 
-  try {
-    const content = readFileSync(envPath, "utf-8");
-    for (const line of content.split(/\r?\n/)) {
-      const parsed = parseEnvLine(line);
-      if (!parsed) {
-        continue;
-      }
-
-      const [key, value] = parsed;
-      if (process.env[key] === undefined) {
-        process.env[key] = value;
-      }
-    }
-  } catch (error) {
-    if (isNodeError(error) && error.code === "ENOENT") {
-      return;
-    }
-
-    throw error;
-  }
+function cleanOptional(value: string | undefined) {
+  const cleaned = value?.trim();
+  return cleaned && !PLACEHOLDER_VALUES.has(cleaned) ? cleaned : undefined;
 }
 
 let cachedConfig: AiConfig | null = null;
 
 export function getAiConfig(): AiConfig {
-  if (cachedConfig !== null) {
-    return cachedConfig;
-  }
+  if (cachedConfig !== null) return cachedConfig;
 
-  loadRootEnv();
+  const parsed = envSchema.parse(process.env);
 
   cachedConfig = {
-    apiBaseUrl: trimTrailingSlash(process.env.AI_API_BASE_URL?.trim() || "https://api.openai.com/v1"),
-    apiKey: cleanOptional(process.env.AI_API_KEY),
-    model: cleanOptional(process.env.AI_MODEL),
-    temperature: parseNumber(process.env.AI_TEMPERATURE, 1),
-    timeoutMs: Math.max(1000, Math.round(parseNumber(process.env.AI_TIMEOUT_MS, 120000))),
-    enableFallback: parseBoolean(process.env.AI_ENABLE_FALLBACK, true)
+    apiBaseUrl: parsed.AI_API_BASE_URL.replace(/\/+$/, ""),
+    apiKey: cleanOptional(parsed.AI_API_KEY),
+    model: cleanOptional(parsed.AI_MODEL),
+    temperature: parsed.AI_TEMPERATURE,
+    timeoutMs: parsed.AI_TIMEOUT_MS,
+    enableFallback: parsed.AI_ENABLE_FALLBACK,
   };
 
   return cachedConfig;
@@ -73,17 +60,10 @@ export function validateAiConfigOnStartup() {
   const config = getAiConfig();
   const missing = [];
 
-  if (!config.apiKey) {
-    missing.push("AI_API_KEY");
-  }
+  if (!config.apiKey) missing.push("AI_API_KEY");
+  if (!config.model) missing.push("AI_MODEL");
 
-  if (!config.model) {
-    missing.push("AI_MODEL");
-  }
-
-  if (missing.length === 0) {
-    return;
-  }
+  if (missing.length === 0) return;
 
   const message = `AI 配置缺失：${missing.join(", ")}。请复制 .env.example 为 .env，并填写后端 AI 配置。`;
 
@@ -95,63 +75,5 @@ export function validateAiConfigOnStartup() {
   console.error(`${message} 当前 AI_ENABLE_FALLBACK=false，AI 生成失败时会返回 502。`);
 }
 
-function parseEnvLine(line: string): [string, string] | null {
-  const trimmed = line.trim();
-
-  if (!trimmed || trimmed.startsWith("#")) {
-    return null;
-  }
-
-  const separatorIndex = trimmed.indexOf("=");
-  if (separatorIndex === -1) {
-    return null;
-  }
-
-  const key = trimmed.slice(0, separatorIndex).trim();
-  const value = unquote(trimmed.slice(separatorIndex + 1).trim());
-
-  return key ? [key, value] : null;
-}
-
-function unquote(value: string) {
-  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-    return value.slice(1, -1);
-  }
-
-  return value;
-}
-
-function cleanOptional(value: string | undefined) {
-  const cleaned = value?.trim();
-
-  if (!cleaned || cleaned === "your_api_key_here" || cleaned === "your_model_name_here") {
-    return undefined;
-  }
-
-  return cleaned;
-}
-
-function trimTrailingSlash(value: string) {
-  return value.replace(/\/+$/, "");
-}
-
-function parseNumber(value: string | undefined, fallback: number) {
-  if (!value) {
-    return fallback;
-  }
-
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function parseBoolean(value: string | undefined, fallback: boolean) {
-  if (!value) {
-    return fallback;
-  }
-
-  return !["false", "0", "no", "off"].includes(value.trim().toLowerCase());
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
-}
+// Keep for backward compatibility
+export function loadRootEnv() {}
