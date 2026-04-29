@@ -22,6 +22,7 @@ export interface Seed {
   sourceVibe: string;
   createdAt: string;
   explorations: Exploration[];
+  shareId?: string;
 }
 
 export interface CreateSeedInput {

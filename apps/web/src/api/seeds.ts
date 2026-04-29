@@ -122,3 +122,33 @@ export async function deleteSeed(seedId: string) {
     throw new Error("删除 seed 失败");
   }
 }
+
+export async function enableShare(seedId: string) {
+  const response = await fetch(`/api/seeds/${seedId}/share`, { method: "POST" });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "开启分享失败"));
+  }
+
+  return (await response.json()) as Seed;
+}
+
+export async function disableShare(seedId: string) {
+  const response = await fetch(`/api/seeds/${seedId}/share`, { method: "DELETE" });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "关闭分享失败"));
+  }
+
+  return (await response.json()) as Seed;
+}
+
+export async function fetchSharedSeed(shareId: string) {
+  const response = await fetch(`/api/share/${shareId}`);
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "分享链接不存在或已关闭"));
+  }
+
+  return (await response.json()) as Omit<Seed, "explorations">;
+}

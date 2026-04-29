@@ -80,6 +80,32 @@ export async function deleteSeed(id: string): Promise<boolean> {
   });
 }
 
+export async function updateSeedShare(id: string, shareId: string | null): Promise<Seed | null> {
+  return withWriteLock(async () => {
+    const seeds = await readSeedsFile();
+    const index = seeds.findIndex((seed) => seed.id === id);
+
+    if (index === -1) return null;
+
+    const updated = { ...seeds[index] };
+    if (shareId === null) {
+      delete updated.shareId;
+    } else {
+      updated.shareId = shareId;
+    }
+
+    seeds[index] = updated;
+    await writeSeedsFile(seeds);
+    seedsCache = seeds;
+    return updated;
+  });
+}
+
+export async function getSeedByShareId(shareId: string): Promise<Seed | null> {
+  const seeds = await getSeeds();
+  return seeds.find((seed) => seed.shareId === shareId) ?? null;
+}
+
 async function ensureDataFile() {
   await mkdir(dataDir, { recursive: true });
 
@@ -176,6 +202,7 @@ function normalizeSeed(value: unknown): Seed | null {
   const score = typeof rawScore === "number" && Number.isFinite(rawScore) ? rawScore : calculateSeedScore(sourceVibe);
   const source = record.source === "ai" || record.source === "fallback" ? record.source : undefined;
   const explorations = normalizeExplorations(record.explorations);
+  const shareId = typeof record.shareId === "string" && record.shareId.trim() ? record.shareId : undefined;
 
   return {
     id,
@@ -190,7 +217,8 @@ function normalizeSeed(value: unknown): Seed | null {
     sourceVibe,
     createdAt,
     score: Math.max(1, Math.min(100, Math.round(score))),
-    explorations
+    explorations,
+    ...(shareId ? { shareId } : {})
   };
 }
 

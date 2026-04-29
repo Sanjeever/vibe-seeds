@@ -4,7 +4,7 @@ import type { CreateSeedInput, ExplorationDimension } from "@vibe-seeds/shared";
 import { validateAiConfigOnStartup } from "./config/env.js";
 import { buildExplorationMeta, generateExploration, streamExplorationContent } from "./services/explorationService.js";
 import { isAiGenerationError, createSeed } from "./services/seedService.js";
-import { addSeed, appendExploration, deleteSeed, getSeedById, getSeeds, removeExploration } from "./store.js";
+import { addSeed, appendExploration, deleteSeed, getSeedById, getSeedByShareId, getSeeds, removeExploration, updateSeedShare } from "./store.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 3001);
@@ -233,6 +233,55 @@ app.delete("/api/seeds/:id/explorations/:explorationId", async (request, respons
     }
 
     response.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/seeds/:id/share", async (request, response, next) => {
+  try {
+    const seed = await getSeedById(request.params.id);
+
+    if (!seed) {
+      response.status(404).json({ message: "Seed not found" });
+      return;
+    }
+
+    const shareId = seed.shareId ?? crypto.randomUUID();
+    const updated = await updateSeedShare(seed.id, shareId);
+    response.json(updated);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/seeds/:id/share", async (request, response, next) => {
+  try {
+    const seed = await getSeedById(request.params.id);
+
+    if (!seed) {
+      response.status(404).json({ message: "Seed not found" });
+      return;
+    }
+
+    const updated = await updateSeedShare(seed.id, null);
+    response.json(updated);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/share/:shareId", async (request, response, next) => {
+  try {
+    const seed = await getSeedByShareId(request.params.shareId);
+
+    if (!seed) {
+      response.status(404).json({ message: "分享链接不存在或已关闭" });
+      return;
+    }
+
+    const { explorations: _e, ...publicSeed } = seed;
+    response.json(publicSeed);
   } catch (error) {
     next(error);
   }
