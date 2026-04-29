@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import type { Seed } from "@vibe-seeds/shared";
+import type { Exploration, Seed } from "@vibe-seeds/shared";
 import { createSeed as createSeedRequest, deleteSeed, fetchSeeds } from "./api/seeds";
+import ExploreDrawer from "./components/ExploreDrawer.vue";
 import SeedCard from "./components/SeedCard.vue";
 import { examplePrompts } from "./constants/example-prompts";
 import { sortSeeds, type SeedSortMode } from "./utils/seeds";
@@ -69,6 +70,30 @@ async function removeSeed(seedId: string) {
 
 function setExamplePrompt(prompt: string) {
   vibe.value = prompt;
+}
+
+const selectedSeed = ref<Seed | null>(null);
+
+function handleExplore(seed: Seed) {
+  selectedSeed.value = seed;
+}
+
+function handleDrawerClose() {
+  selectedSeed.value = null;
+}
+
+function handleExplorationAdded(seedId: string, exploration: Exploration) {
+  const target = seeds.value.find((s) => s.id === seedId);
+  if (target) {
+    target.explorations.push(exploration);
+  }
+}
+
+function handleExplorationRemoved(seedId: string, explorationId: string) {
+  const target = seeds.value.find((s) => s.id === seedId);
+  if (target) {
+    target.explorations = target.explorations.filter((e) => e.id !== explorationId);
+  }
 }
 </script>
 
@@ -167,9 +192,18 @@ function setExamplePrompt(prompt: string) {
             :key="seed.id"
             :seed="seed"
             @remove="removeSeed"
+            @explore="handleExplore"
           />
         </div>
       </section>
     </section>
   </main>
+
+  <ExploreDrawer
+    :seed="selectedSeed"
+    :is-open="selectedSeed !== null"
+    @close="handleDrawerClose"
+    @exploration-added="handleExplorationAdded"
+    @exploration-removed="handleExplorationRemoved"
+  />
 </template>

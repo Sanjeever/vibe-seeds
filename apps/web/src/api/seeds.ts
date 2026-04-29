@@ -1,4 +1,4 @@
-import type { Seed } from "@vibe-seeds/shared";
+import type { Exploration, ExplorationDimension, Seed } from "@vibe-seeds/shared";
 
 interface ErrorPayload {
   message?: string;
@@ -33,6 +33,84 @@ export async function createSeed(vibe: string) {
   }
 
   return (await response.json()) as Seed;
+}
+
+export async function exploreSeed(seedId: string, dimension: ExplorationDimension, customPrompt?: string) {
+  const response = await fetch(`/api/seeds/${seedId}/explore`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ dimension, customPrompt })
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "探索生成失败"));
+  }
+
+  return (await response.json()) as Exploration;
+}
+
+export type StreamEvent =
+  | { type: "init"; id: string; dimension: ExplorationDimension; prompt: string; createdAt: string }
+  | { type: "chunk"; content: string }
+  | { type: "done" }
+  | { type: "error"; message: string };
+
+export async function* streamExploreSeed(
+  seedId: string,
+  dimension: ExplorationDimension,
+  customPrompt?: string,
+  signal?: AbortSignal
+): AsyncGenerator<StreamEvent> {
+  const response = await fetch(`/api/seeds/${seedId}/explore/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dimension, customPrompt }),
+    signal
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error(await readErrorMessage(response, "探索生成失败"));
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data: ")) continue;
+
+        try {
+          yield JSON.parse(trimmed.slice(6)) as StreamEvent;
+        } catch {
+          // skip malformed SSE lines
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+export async function deleteExploration(seedId: string, explorationId: string) {
+  const response = await fetch(`/api/seeds/${seedId}/explorations/${explorationId}`, {
+    method: "DELETE"
+  });
+
+  if (!response.ok && response.status !== 404) {
+    throw new Error("删除探索失败");
+  }
 }
 
 export async function deleteSeed(seedId: string) {

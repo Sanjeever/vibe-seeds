@@ -34,13 +34,14 @@ function createSeedFromDraft(vibe: string, draft: SeedDraft): Seed {
     score: calculateSeedScore(vibe),
     source: "ai",
     sourceVibe: vibe,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    explorations: []
   };
 }
 
-class AiGenerationError extends Error {
-  constructor() {
-    super("AI generation failed");
+export class AiGenerationError extends Error {
+  constructor(message = "AI generation failed") {
+    super(message);
   }
 }
 

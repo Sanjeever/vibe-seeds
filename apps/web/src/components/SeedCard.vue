@@ -9,6 +9,7 @@ defineProps<{
 
 const emit = defineEmits<{
   remove: [seedId: string];
+  explore: [seed: Seed];
 }>();
 
 const copied = ref(false);
@@ -96,8 +97,17 @@ async function copyPrompt(text: string) {
       </section>
     </div>
 
-    <div class="mt-6 flex flex-wrap gap-2">
-      <span v-for="tag in seed.tags" :key="tag" class="text-xs text-stone-500"> #{{ tag }} </span>
+    <div class="mt-6 flex items-center justify-between gap-4">
+      <div class="flex flex-wrap gap-2">
+        <span v-for="tag in seed.tags" :key="tag" class="text-xs text-stone-500"> #{{ tag }} </span>
+      </div>
+      <button
+        class="shrink-0 border border-stone-300 px-4 py-1.5 text-xs text-stone-600 transition hover:border-stone-900 hover:text-stone-900"
+        type="button"
+        @click="emit('explore', seed)"
+      >
+        继续探索
+      </button>
     </div>
   </article>
 </template>

@@ -1,3 +1,13 @@
+export type ExplorationDimension = "mvp" | "tech" | "competitor" | "validation" | "custom";
+
+export interface Exploration {
+  id: string;
+  dimension: ExplorationDimension;
+  prompt: string;
+  response: string;
+  createdAt: string;
+}
+
 export interface Seed {
   id: string;
   projectName: string;
@@ -11,6 +21,7 @@ export interface Seed {
   source?: "ai" | "fallback";
   sourceVibe: string;
   createdAt: string;
+  explorations: Exploration[];
 }
 
 export interface CreateSeedInput {

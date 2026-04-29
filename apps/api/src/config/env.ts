@@ -62,7 +62,7 @@ export function getAiConfig(): AiConfig {
     apiKey: cleanOptional(process.env.AI_API_KEY),
     model: cleanOptional(process.env.AI_MODEL),
     temperature: parseNumber(process.env.AI_TEMPERATURE, 1),
-    timeoutMs: Math.max(1000, Math.round(parseNumber(process.env.AI_TIMEOUT_MS, 30000))),
+    timeoutMs: Math.max(1000, Math.round(parseNumber(process.env.AI_TIMEOUT_MS, 120000))),
     enableFallback: parseBoolean(process.env.AI_ENABLE_FALLBACK, true)
   };
 

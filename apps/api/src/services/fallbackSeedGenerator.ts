@@ -40,7 +40,8 @@ export function createFallbackSeedFromVibe(vibe: string): Seed {
     score: calculateSeedScore(normalizedVibe),
     source: "fallback",
     sourceVibe: normalizedVibe,
-    createdAt
+    createdAt,
+    explorations: []
   };
 }
 

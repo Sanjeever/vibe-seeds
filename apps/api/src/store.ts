@@ -1,5 +1,5 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import type { Seed } from "@vibe-seeds/shared";
+import type { Exploration, Seed } from "@vibe-seeds/shared";
 import { dataDir, seedsPath } from "./config/paths.js";
 import { calculateSeedScore } from "./utils/score.js";
 
@@ -22,6 +22,46 @@ export async function addSeed(seed: Seed): Promise<Seed> {
     await writeSeedsFile(next);
     seedsCache = next;
     return seed;
+  });
+}
+
+export async function getSeedById(id: string): Promise<Seed | null> {
+  const seeds = await getSeeds();
+  return seeds.find((seed) => seed.id === id) ?? null;
+}
+
+export async function appendExploration(seedId: string, exploration: Exploration): Promise<Seed | null> {
+  return withWriteLock(async () => {
+    const seeds = await readSeedsFile();
+    const index = seeds.findIndex((seed) => seed.id === seedId);
+
+    if (index === -1) {
+      return null;
+    }
+
+    seeds[index] = { ...seeds[index], explorations: [...seeds[index].explorations, exploration] };
+    await writeSeedsFile(seeds);
+    seedsCache = seeds;
+    return seeds[index];
+  });
+}
+
+export async function removeExploration(seedId: string, explorationId: string): Promise<boolean> {
+  return withWriteLock(async () => {
+    const seeds = await readSeedsFile();
+    const index = seeds.findIndex((seed) => seed.id === seedId);
+
+    if (index === -1) return false;
+
+    const prev = seeds[index].explorations;
+    const next = prev.filter((e) => e.id !== explorationId);
+
+    if (next.length === prev.length) return false;
+
+    seeds[index] = { ...seeds[index], explorations: next };
+    await writeSeedsFile(seeds);
+    seedsCache = seeds;
+    return true;
   });
 }
 
@@ -135,6 +175,7 @@ function normalizeSeed(value: unknown): Seed | null {
   const rawScore = record.score;
   const score = typeof rawScore === "number" && Number.isFinite(rawScore) ? rawScore : calculateSeedScore(sourceVibe);
   const source = record.source === "ai" || record.source === "fallback" ? record.source : undefined;
+  const explorations = normalizeExplorations(record.explorations);
 
   return {
     id,
@@ -148,7 +189,8 @@ function normalizeSeed(value: unknown): Seed | null {
     source,
     sourceVibe,
     createdAt,
-    score: Math.max(1, Math.min(100, Math.round(score)))
+    score: Math.max(1, Math.min(100, Math.round(score))),
+    explorations
   };
 }
 
@@ -165,4 +207,25 @@ function readStringArray(record: Record<string, unknown>, key: string): string[]
   }
 
   return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+const validDimensions = new Set(["mvp", "tech", "competitor", "validation", "custom"]);
+
+function normalizeExplorations(value: unknown): Exploration[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is Exploration => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    const r = item as Record<string, unknown>;
+    return (
+      typeof r.id === "string" &&
+      typeof r.dimension === "string" &&
+      validDimensions.has(r.dimension) &&
+      typeof r.prompt === "string" &&
+      typeof r.response === "string" &&
+      typeof r.createdAt === "string"
+    );
+  });
 }

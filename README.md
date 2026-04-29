@@ -36,7 +36,7 @@ AI_API_BASE_URL=https://api.openai.com/v1
 AI_API_KEY=你的 key
 AI_MODEL=你的模型名
 AI_TEMPERATURE=1
-AI_TIMEOUT_MS=30000
+AI_TIMEOUT_MS=120000
 AI_ENABLE_FALLBACK=false
 ```
 
@@ -46,7 +46,7 @@ AI_ENABLE_FALLBACK=false
 - `AI_API_KEY`：服务端调用 AI 的 API key，只能放在后端 `.env`，不要放到前端代码里
 - `AI_MODEL`：要使用的模型名
 - `AI_TEMPERATURE`：生成随机性，默认 `1`
-- `AI_TIMEOUT_MS`：AI 请求超时时间，默认 `30000`
+- `AI_TIMEOUT_MS`：AI 请求超时时间，默认 `120000`
 - `AI_ENABLE_FALLBACK`：AI 失败时是否启用本地规则兜底；`true` 时返回 `source: "fallback"`，`false` 时返回 502
 
 如果使用其他兼容 `/v1/chat/completions` 的服务，只需要修改 `AI_API_BASE_URL` 和 `AI_MODEL`，API key 仍然只保存在后端 `.env`。
