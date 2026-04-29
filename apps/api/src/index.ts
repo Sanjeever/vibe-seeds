@@ -1,10 +1,27 @@
 import cors from "cors";
 import express from "express";
-import type { CreateSeedInput, ExplorationDimension, SceneType } from "@vibe-seeds/shared";
+import { z } from "zod";
+import type { ExplorationDimension, SceneType } from "@vibe-seeds/shared";
 import { validateAiConfigOnStartup } from "./config/env.js";
 import { buildExplorationMeta, generateExploration, streamExplorationContent } from "./services/explorationService.js";
 import { isAiGenerationError, createSeed } from "./services/seedService.js";
 import { addSeed, appendExploration, deleteSeed, getSeedById, getSeedByShareId, getSeeds, removeExploration, updateSeedShare } from "./store.js";
+
+const sceneValues = ["indie-tool", "mobile", "chrome-extension", "ai-app"] as const;
+const dimensionValues = ["mvp", "tech", "competitor", "validation", "custom"] as const;
+
+const createSeedSchema = z.object({
+  vibe: z.string().trim().min(2, "请先输入至少 2 个字符的 vibe 描述。").max(500, "Vibe 描述不能超过 500 个字符。"),
+  scene: z.enum(sceneValues).optional(),
+});
+
+const exploreSchema = z.object({
+  dimension: z.enum(dimensionValues, { error: "dimension 参数无效，必须为 mvp、tech、competitor、validation 或 custom。" }),
+  customPrompt: z.string().trim().min(2, "自定义追问内容至少需要 2 个字符。").max(500, "自定义追问内容不能超过 500 个字符。").optional(),
+}).refine((d) => d.dimension !== "custom" || (!!d.customPrompt && d.customPrompt.length >= 2), {
+  message: "自定义追问内容至少需要 2 个字符。",
+  path: ["customPrompt"],
+});
 
 const app = express();
 const port = Number(process.env.PORT ?? 3001);
@@ -33,24 +50,13 @@ app.get("/api/seeds", async (_request, response, next) => {
 
 app.post("/api/seeds", async (request, response, next) => {
   try {
-    const body = request.body as Partial<CreateSeedInput>;
-    const vibe = typeof body.vibe === "string" ? body.vibe.trim() : "";
-
-    if (vibe.length < 2) {
-      response.status(400).json({ message: "请先输入至少 2 个字符的 vibe 描述。" });
+    const parsed = createSeedSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ message: parsed.error.issues[0].message });
       return;
     }
-
-    if (vibe.length > 500) {
-      response.status(400).json({ message: "Vibe 描述不能超过 500 个字符。" });
-      return;
-    }
-
-    const validScenes = new Set<SceneType>(["indie-tool", "mobile", "chrome-extension", "ai-app"]);
-    const rawScene = body.scene;
-    const scene = typeof rawScene === "string" && validScenes.has(rawScene as SceneType) ? (rawScene as SceneType) : undefined;
-
-    const seed = await createSeed(vibe, scene);
+    const { vibe, scene } = parsed.data;
+    const seed = await createSeed(vibe, scene as SceneType | undefined);
     const savedSeed = await addSeed(seed);
     response.status(201).json(savedSeed);
   } catch (error) {
@@ -63,7 +69,6 @@ app.post("/api/seeds", async (request, response, next) => {
   }
 });
 
-const validDimensions = new Set<ExplorationDimension>(["mvp", "tech", "competitor", "validation", "custom"]);
 
 app.post("/api/seeds/:id/explore", async (request, response, next) => {
   try {
@@ -74,28 +79,15 @@ app.post("/api/seeds/:id/explore", async (request, response, next) => {
       return;
     }
 
-    const body = request.body as { dimension?: unknown; customPrompt?: unknown };
-    const dimension = body.dimension;
-
-    if (typeof dimension !== "string" || !validDimensions.has(dimension as ExplorationDimension)) {
-      response.status(400).json({ message: "dimension 参数无效，必须为 mvp、tech、competitor、validation 或 custom。" });
+    const parsed = exploreSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ message: parsed.error.issues[0].message });
       return;
     }
+    const { dimension, customPrompt } = parsed.data;
 
     if (dimension === "custom") {
-      const customPrompt = typeof body.customPrompt === "string" ? body.customPrompt.trim() : "";
-
-      if (customPrompt.length < 2) {
-        response.status(400).json({ message: "自定义追问内容至少需要 2 个字符。" });
-        return;
-      }
-
-      if (customPrompt.length > 500) {
-        response.status(400).json({ message: "自定义追问内容不能超过 500 个字符。" });
-        return;
-      }
-
-      const exploration = await generateExploration(seed, "custom", customPrompt);
+      const exploration = await generateExploration(seed, "custom", customPrompt!);
       const updated = await appendExploration(seed.id, exploration);
 
       if (!updated) {
@@ -136,29 +128,12 @@ app.post("/api/seeds/:id/explore/stream", async (request, response, next) => {
       return;
     }
 
-    const body = request.body as { dimension?: unknown; customPrompt?: unknown };
-    const dimension = body.dimension;
-
-    if (typeof dimension !== "string" || !validDimensions.has(dimension as ExplorationDimension)) {
-      response.status(400).json({ message: "dimension 参数无效。" });
+    const parsed = exploreSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ message: parsed.error.issues[0].message });
       return;
     }
-
-    let customPrompt: string | undefined;
-
-    if (dimension === "custom") {
-      customPrompt = typeof body.customPrompt === "string" ? body.customPrompt.trim() : "";
-
-      if (!customPrompt || customPrompt.length < 2) {
-        response.status(400).json({ message: "自定义追问内容至少需要 2 个字符。" });
-        return;
-      }
-
-      if (customPrompt.length > 500) {
-        response.status(400).json({ message: "自定义追问内容不能超过 500 个字符。" });
-        return;
-      }
-    }
+    const { dimension, customPrompt } = parsed.data;
 
     const meta = buildExplorationMeta(dimension as ExplorationDimension, customPrompt);
 
