@@ -1,14 +1,7 @@
+import OpenAI from "openai";
 import type { SceneType, SeedDraft } from "@vibe-seeds/shared";
 import { getAiConfig } from "../config/env.js";
 import { parseSeedDraft } from "./seedDraftParser.js";
-
-type ChatCompletionResponse = {
-  choices?: Array<{
-    message?: {
-      content?: string | null;
-    };
-  }>;
-};
 
 const baseOutputRules = `你必须只输出严格 JSON，不要输出 Markdown，不要解释。
 输出字段必须符合：
@@ -83,42 +76,26 @@ export async function generateSeedWithAI(input: string, scene?: SceneType): Prom
     throw new Error("AI 配置缺失：请设置 AI_API_KEY 和 AI_MODEL。");
   }
 
+  const client = new OpenAI({
+    apiKey: config.apiKey,
+    baseURL: config.apiBaseUrl,
+    timeout: config.timeoutMs,
+    maxRetries: 0,
+  });
+
   const systemPrompt = scene ? sceneSystemPrompts[scene] : defaultSystemPrompt;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
-
   try {
-    const response = await fetch(`${config.apiBaseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: config.model,
-        temperature: config.temperature,
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt
-          },
-          {
-            role: "user",
-            content: createUserPrompt(input, scene)
-          }
-        ]
-      }),
-      signal: controller.signal
+    const completion = await client.chat.completions.create({
+      model: config.model,
+      temperature: config.temperature,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: createUserPrompt(input, scene) },
+      ],
     });
 
-    if (!response.ok) {
-      const responseText = await response.text().catch(() => "");
-      throw new Error(`AI 接口返回 ${response.status}${responseText ? `：${responseText.slice(0, 300)}` : ""}`);
-    }
-
-    const payload = (await response.json()) as ChatCompletionResponse;
-    const content = payload.choices?.[0]?.message?.content;
+    const content = completion.choices[0]?.message.content;
 
     if (!content) {
       throw new Error("AI 响应中没有 message.content。");
@@ -126,13 +103,13 @@ export async function generateSeedWithAI(input: string, scene?: SceneType): Prom
 
     return parseSeedDraft(content);
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
+    if (error instanceof OpenAI.APIConnectionTimeoutError) {
       throw new Error(`AI 请求超时，已超过 ${config.timeoutMs}ms。`);
     }
-
+    if (error instanceof OpenAI.APIError) {
+      throw new Error(`AI 接口返回 ${error.status}：${error.message.slice(0, 300)}`);
+    }
     throw error;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 

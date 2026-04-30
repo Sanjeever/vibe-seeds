@@ -1,21 +1,7 @@
+import OpenAI from "openai";
 import type { Exploration, ExplorationDimension, Seed } from "@vibe-seeds/shared";
 import { getAiConfig } from "../config/env.js";
 import { AiGenerationError } from "./seedService.js";
-
-type ChatCompletionResponse = {
-  choices?: Array<{
-    message?: {
-      content?: string | null;
-    };
-  }>;
-};
-
-type StreamChunk = {
-  choices?: Array<{
-    delta?: { content?: string };
-    finish_reason?: string | null;
-  }>;
-};
 
 const dimensionPrompts: Record<ExplorationDimension, string> = {
   mvp: "请为这个产品生成一份 MVP（最小可行产品）清单。列出必须实现的核心功能，每项包含：功能名、实现优先级（必须/应该/可以）、预估工作量（小/中/大）。输出格式为 Markdown，结构清晰。",
@@ -59,86 +45,45 @@ export async function* streamExplorationContent(
     throw new AiGenerationError("AI 配置缺失：请设置 AI_API_KEY 和 AI_MODEL。");
   }
 
+  const client = new OpenAI({
+    apiKey: config.apiKey,
+    baseURL: config.apiBaseUrl,
+    timeout: config.timeoutMs,
+    maxRetries: 0,
+  });
+
   const userPrompt = dimension === "custom" ? (customPrompt ?? "") : dimensionPrompts[dimension];
 
-  const streamTimeoutMs = config.timeoutMs;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), streamTimeoutMs);
-
-  if (signal) {
-    signal.addEventListener("abort", () => controller.abort());
-  }
-
   try {
-    const response = await fetch(`${config.apiBaseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
+    const stream = await client.chat.completions.create(
+      {
         model: config.model,
         temperature: config.temperature,
         stream: true,
         messages: [
           { role: "system", content: buildSystemPrompt(seed) },
-          { role: "user", content: userPrompt }
-        ]
-      }),
-      signal: controller.signal
-    });
+          { role: "user", content: userPrompt },
+        ],
+      },
+      { signal }
+    );
 
-    if (!response.ok) {
-      const responseText = await response.text().catch(() => "");
-      throw new AiGenerationError(`AI 接口返回 ${response.status}${responseText ? `：${responseText.slice(0, 300)}` : ""}`);
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content;
+      if (content) yield content;
     }
-
-    if (!response.body) {
-      throw new AiGenerationError("AI 响应没有 body。");
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data: ")) continue;
-
-        const data = trimmed.slice(6);
-        if (data === "[DONE]") {
-          console.log("[streamExplorationContent] received [DONE], returning normally");
-          return;
-        }
-
-        try {
-          const parsed = JSON.parse(data) as StreamChunk;
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) yield content;
-        } catch {
-          // skip malformed chunks
-        }
-      }
-    }
-    console.log("[streamExplorationContent] reader exhausted (done=true), returning normally");
   } catch (error) {
     if (error instanceof AiGenerationError) throw error;
-    if (error instanceof Error && error.name === "AbortError") {
-      console.error("[streamExplorationContent] AbortError caught, signal.aborted =", signal?.aborted);
-      throw new AiGenerationError(`AI 请求超时，已超过 ${streamTimeoutMs}ms。`);
+    if (error instanceof OpenAI.APIConnectionTimeoutError) {
+      throw new AiGenerationError(`AI 请求超时，已超过 ${config.timeoutMs}ms。`);
     }
-    console.error("[streamExplorationContent] unexpected error:", error);
+    if (error instanceof OpenAI.APIUserAbortError) {
+      throw error;
+    }
+    if (error instanceof OpenAI.APIError) {
+      throw new AiGenerationError(`AI 接口返回 ${error.status}：${error.message.slice(0, 300)}`);
+    }
     throw error;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -165,36 +110,26 @@ export async function generateExploration(
     throw new AiGenerationError("AI 配置缺失：请设置 AI_API_KEY 和 AI_MODEL。");
   }
 
+  const client = new OpenAI({
+    apiKey: config.apiKey,
+    baseURL: config.apiBaseUrl,
+    timeout: config.timeoutMs,
+    maxRetries: 0,
+  });
+
   const userPrompt = dimension === "custom" ? (customPrompt ?? "") : dimensionPrompts[dimension];
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
-
   try {
-    const response = await fetch(`${config.apiBaseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: config.model,
-        temperature: config.temperature,
-        messages: [
-          { role: "system", content: buildSystemPrompt(seed) },
-          { role: "user", content: userPrompt }
-        ]
-      }),
-      signal: controller.signal
+    const completion = await client.chat.completions.create({
+      model: config.model,
+      temperature: config.temperature,
+      messages: [
+        { role: "system", content: buildSystemPrompt(seed) },
+        { role: "user", content: userPrompt },
+      ],
     });
 
-    if (!response.ok) {
-      const responseText = await response.text().catch(() => "");
-      throw new AiGenerationError(`AI 接口返回 ${response.status}${responseText ? `：${responseText.slice(0, 300)}` : ""}`);
-    }
-
-    const payload = (await response.json()) as ChatCompletionResponse;
-    const content = payload.choices?.[0]?.message?.content;
+    const content = completion.choices[0]?.message.content;
 
     if (!content) {
       throw new AiGenerationError("AI 响应中没有 message.content。");
@@ -208,16 +143,13 @@ export async function generateExploration(
       createdAt: new Date().toISOString()
     };
   } catch (error) {
-    if (error instanceof AiGenerationError) {
-      throw error;
-    }
-
-    if (error instanceof Error && error.name === "AbortError") {
+    if (error instanceof AiGenerationError) throw error;
+    if (error instanceof OpenAI.APIConnectionTimeoutError) {
       throw new AiGenerationError(`AI 请求超时，已超过 ${config.timeoutMs}ms。`);
     }
-
+    if (error instanceof OpenAI.APIError) {
+      throw new AiGenerationError(`AI 接口返回 ${error.status}：${error.message.slice(0, 300)}`);
+    }
     throw error;
-  } finally {
-    clearTimeout(timeout);
   }
 }
