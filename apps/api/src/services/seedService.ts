@@ -36,7 +36,8 @@ function createSeedFromDraft(vibe: string, draft: SeedDraft, scene?: SceneType):
     scene,
     sourceVibe: vibe,
     createdAt: new Date().toISOString(),
-    explorations: []
+    explorations: [],
+    generation: 0
   };
 }
 

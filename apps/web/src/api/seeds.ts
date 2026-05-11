@@ -152,3 +152,35 @@ export async function fetchSharedSeed(shareId: string) {
 
   return (await response.json()) as Omit<Seed, "explorations">;
 }
+
+export async function evolveSeed(seedId: string, evolutionNote: string) {
+  const response = await fetch(`/api/seeds/${seedId}/evolve`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ evolutionNote })
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "演化生成失败"));
+  }
+
+  return (await response.json()) as Seed;
+}
+
+export async function combineSeeds(seedIds: string[], userIntent?: string) {
+  const response = await fetch("/api/seeds/combine", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ seedIds, userIntent })
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "组合生成失败"));
+  }
+
+  return (await response.json()) as Seed;
+}

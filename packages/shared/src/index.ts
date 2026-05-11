@@ -26,6 +26,11 @@ export interface Seed {
   createdAt: string;
   explorations: Exploration[];
   shareId?: string;
+  parentId?: string;
+  evolutionNote?: string;
+  generation: number;
+  sourceSeeds?: string[];
+  combinationNote?: string;
 }
 
 export interface CreateSeedInput {

@@ -41,7 +41,8 @@ export function createFallbackSeedFromVibe(vibe: string): Seed {
     source: "fallback",
     sourceVibe: normalizedVibe,
     createdAt,
-    explorations: []
+    explorations: [],
+    generation: 0
   };
 }
 

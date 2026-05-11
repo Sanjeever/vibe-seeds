@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import type { Exploration, Seed, SceneType } from "@vibe-seeds/shared";
-import { createSeed as createSeedRequest, deleteSeed, fetchSeeds } from "../api/seeds";
+import { createSeed as createSeedRequest, deleteSeed, fetchSeeds, evolveSeed as evolveSeedRequest, combineSeeds as combineSeedsRequest } from "../api/seeds";
 import ExploreDrawer from "../components/ExploreDrawer.vue";
 import SeedCard from "../components/SeedCard.vue";
+import EvolutionTreeView from "../components/EvolutionTreeView.vue";
+import VersionCompare from "../components/VersionCompare.vue";
 import { getExamplePrompts } from "../constants/example-prompts";
 import { sortSeeds, type SeedSortMode } from "../utils/seeds";
 
@@ -16,6 +18,19 @@ const sortMode = ref<SeedSortMode>("createdAt");
 const searchQuery = ref("");
 const selectedTags = ref<string[]>([]);
 const selectedScene = ref<SceneType | undefined>(undefined);
+const selectedSeed = ref<Seed | null>(null);
+const evolvingSeed = ref<Seed | null>(null);
+const evolutionNote = ref("");
+const isEvolving = ref(false);
+const isComboMode = ref(false);
+const selectedSeedIds = ref<string[]>([]);
+const combineIntent = ref("");
+const isCombining = ref(false);
+const showCombineDialog = ref(false);
+const showEvolutionTree = ref(false);
+const compareParent = ref<Seed | null>(null);
+const compareChild = ref<Seed | null>(null);
+const showVersionCompare = ref(false);
 
 const scenes: { type: SceneType; label: string; icon: string }[] = [
   { type: "indie-tool", label: "独立开发者工具", icon: "🛠" },
@@ -137,8 +152,6 @@ function setExamplePrompt(prompt: string) {
   vibe.value = prompt;
 }
 
-const selectedSeed = ref<Seed | null>(null);
-
 function handleExplore(seed: Seed) {
   selectedSeed.value = seed;
 }
@@ -165,6 +178,105 @@ function handleShareUpdated(updatedSeed: Seed) {
   const index = seeds.value.findIndex((s) => s.id === updatedSeed.id);
   if (index !== -1) {
     seeds.value[index] = { ...seeds.value[index], shareId: updatedSeed.shareId };
+  }
+}
+
+function handleEvolve(seed: Seed) {
+  evolvingSeed.value = seed;
+  evolutionNote.value = "";
+}
+
+function closeEvolveDialog() {
+  evolvingSeed.value = null;
+  evolutionNote.value = "";
+}
+
+async function submitEvolution() {
+  if (!evolvingSeed.value || evolutionNote.value.trim().length < 2) return;
+
+  isEvolving.value = true;
+  errorMessage.value = "";
+
+  try {
+    const evolved = await evolveSeedRequest(evolvingSeed.value.id, evolutionNote.value.trim());
+    seeds.value.unshift(evolved);
+    closeEvolveDialog();
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "演化生成失败";
+  } finally {
+    isEvolving.value = false;
+  }
+}
+
+function toggleComboMode() {
+  isComboMode.value = !isComboMode.value;
+  if (!isComboMode.value) {
+    selectedSeedIds.value = [];
+    combineIntent.value = "";
+  }
+}
+
+function toggleSeedSelection(seedId: string) {
+  const idx = selectedSeedIds.value.indexOf(seedId);
+  if (idx === -1) {
+    if (selectedSeedIds.value.length < 3) {
+      selectedSeedIds.value.push(seedId);
+    }
+  } else {
+    selectedSeedIds.value.splice(idx, 1);
+  }
+}
+
+function clearSelection() {
+  selectedSeedIds.value = [];
+  combineIntent.value = "";
+}
+
+function openCombineDialog() {
+  if (selectedSeedIds.value.length < 2) return;
+  showCombineDialog.value = true;
+}
+
+function closeCombineDialog() {
+  showCombineDialog.value = false;
+  combineIntent.value = "";
+}
+
+async function submitCombination() {
+  if (selectedSeedIds.value.length < 2) return;
+
+  isCombining.value = true;
+  errorMessage.value = "";
+
+  try {
+    const intent = combineIntent.value.trim() || undefined;
+    const combined = await combineSeedsRequest(selectedSeedIds.value, intent);
+    seeds.value.unshift(combined);
+    closeCombineDialog();
+    toggleComboMode();
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "组合生成失败";
+  } finally {
+    isCombining.value = false;
+  }
+}
+
+function handleTreeSelectSeed(seedId: string) {
+  const seed = seeds.value.find(s => s.id === seedId);
+  if (seed) {
+    showEvolutionTree.value = false;
+    selectedSeed.value = seed;
+  }
+}
+
+function handleCompare(seed: Seed) {
+  if (!seed.parentId) return;
+
+  const parent = seeds.value.find(s => s.id === seed.parentId);
+  if (parent) {
+    compareParent.value = parent;
+    compareChild.value = seed;
+    showVersionCompare.value = true;
   }
 }
 </script>
@@ -262,6 +374,21 @@ function handleShareUpdated(updatedSeed: Seed) {
               </button>
             </div>
             <button
+              class="border px-4 py-2 text-sm transition"
+              :class="isComboMode ? 'border-stone-900 bg-stone-900 text-stone-50' : 'border-stone-300 text-stone-600 hover:border-stone-900 hover:text-stone-900'"
+              type="button"
+              @click="toggleComboMode"
+            >
+              {{ isComboMode ? '退出组合' : '组合灵感' }}
+            </button>
+            <button
+              class="border border-stone-300 px-4 py-2 text-sm text-stone-600 transition hover:border-stone-900 hover:text-stone-900"
+              type="button"
+              @click="showEvolutionTree = true"
+            >
+              演化树
+            </button>
+            <button
               class="border border-stone-300 px-4 py-2 text-sm text-stone-600 transition hover:border-stone-900 hover:text-stone-900"
               type="button"
               @click="loadSeeds"
@@ -327,14 +454,21 @@ function handleShareUpdated(updatedSeed: Seed) {
         </div>
 
         <div v-else class="grid gap-8 lg:grid-cols-2">
-          <SeedCard
+          <div
             v-for="seed in filteredSeeds"
             :key="seed.id"
-            :seed="seed"
-            @remove="removeSeed"
-            @explore="handleExplore"
-            @share-updated="handleShareUpdated"
-          />
+            :class="{ 'ring-2 ring-offset-2 ring-blue-500': isComboMode && selectedSeedIds.includes(seed.id), 'cursor-pointer': isComboMode }"
+            @click="isComboMode && toggleSeedSelection(seed.id)"
+          >
+            <SeedCard
+              :seed="seed"
+              @remove="removeSeed"
+              @explore="handleExplore"
+              @share-updated="handleShareUpdated"
+              @evolve="handleEvolve"
+              @compare="handleCompare"
+            />
+          </div>
         </div>
       </section>
     </section>
@@ -347,4 +481,188 @@ function handleShareUpdated(updatedSeed: Seed) {
     @exploration-added="handleExplorationAdded"
     @exploration-removed="handleExplorationRemoved"
   />
+
+  <!-- 演化对话框 -->
+  <Teleport to="body">
+    <Transition name="dialog">
+      <div v-if="evolvingSeed" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/30" @click="closeEvolveDialog"></div>
+
+        <div class="relative w-full max-w-lg border border-stone-200 bg-white p-8 shadow-xl">
+          <button
+            class="absolute right-4 top-4 text-stone-400 transition hover:text-stone-900"
+            type="button"
+            @click="closeEvolveDialog"
+          >
+            ✕
+          </button>
+
+          <h3 class="font-display text-2xl font-light text-stone-900">演化想法</h3>
+          <p class="mt-2 text-sm text-stone-500">基于「{{ evolvingSeed.projectName }}」生成改进版本</p>
+
+          <div class="mt-6">
+            <label class="block text-sm text-stone-600" for="evolution-note">你希望如何改进这个想法？</label>
+            <textarea
+              id="evolution-note"
+              v-model="evolutionNote"
+              class="mt-2 min-h-32 w-full resize-y border border-stone-300 bg-white px-4 py-3 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-stone-900"
+              placeholder="例如：加入番茄钟和白噪音功能"
+              :disabled="isEvolving"
+            ></textarea>
+          </div>
+
+          <div class="mt-6 flex justify-end gap-3">
+            <button
+              class="border border-stone-300 px-6 py-2 text-sm text-stone-600 transition hover:border-stone-900 hover:text-stone-900"
+              type="button"
+              :disabled="isEvolving"
+              @click="closeEvolveDialog"
+            >
+              取消
+            </button>
+            <button
+              class="border border-stone-900 bg-stone-900 px-6 py-2 text-sm text-stone-50 transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:border-stone-300 disabled:bg-stone-200 disabled:text-stone-500"
+              type="button"
+              :disabled="isEvolving || evolutionNote.trim().length < 2"
+              @click="submitEvolution"
+            >
+              {{ isEvolving ? "生成中..." : "生成演化版本" }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- 组合模式浮动操作栏 -->
+  <Teleport to="body">
+    <Transition name="float-bar">
+      <div v-if="isComboMode && selectedSeedIds.length > 0" class="fixed bottom-8 left-1/2 z-40 -translate-x-1/2">
+        <div class="border border-stone-900 bg-stone-900 px-6 py-4 text-stone-50 shadow-xl">
+          <div class="flex items-center gap-6">
+            <span class="text-sm">已选择 {{ selectedSeedIds.length }} 个灵感</span>
+            <button
+              class="text-sm underline decoration-stone-400 underline-offset-4 transition hover:decoration-stone-50"
+              type="button"
+              @click="clearSelection"
+            >
+              清空
+            </button>
+            <button
+              class="border border-stone-50 bg-stone-50 px-4 py-2 text-sm text-stone-900 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+              type="button"
+              :disabled="selectedSeedIds.length < 2"
+              @click="openCombineDialog"
+            >
+              生成组合
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- 组合对话框 -->
+  <Teleport to="body">
+    <Transition name="dialog">
+      <div v-if="showCombineDialog" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/30" @click="closeCombineDialog"></div>
+
+        <div class="relative w-full max-w-lg border border-stone-200 bg-white p-8 shadow-xl">
+          <button
+            class="absolute right-4 top-4 text-stone-400 transition hover:text-stone-900"
+            type="button"
+            @click="closeCombineDialog"
+          >
+            ✕
+          </button>
+
+          <h3 class="font-display text-2xl font-light text-stone-900">组合灵感</h3>
+          <p class="mt-2 text-sm text-stone-500">将 {{ selectedSeedIds.length }} 个想法融合成新产品</p>
+
+          <div class="mt-4 space-y-2">
+            <p class="text-xs text-stone-400">已选择的灵感：</p>
+            <div class="flex flex-wrap gap-2">
+              <span
+                v-for="seedId in selectedSeedIds"
+                :key="seedId"
+                class="border border-stone-300 bg-stone-50 px-3 py-1 text-xs text-stone-700"
+              >
+                {{ seeds.find(s => s.id === seedId)?.projectName }}
+              </span>
+            </div>
+          </div>
+
+          <div class="mt-6">
+            <label class="block text-sm text-stone-600" for="combine-intent">你希望组合后的产品侧重什么？（可选）</label>
+            <textarea
+              id="combine-intent"
+              v-model="combineIntent"
+              class="mt-2 min-h-24 w-full resize-y border border-stone-300 bg-white px-4 py-3 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-stone-900"
+              placeholder="例如：侧重移动端体验和社交分享功能"
+              :disabled="isCombining"
+            ></textarea>
+          </div>
+
+          <div class="mt-6 flex justify-end gap-3">
+            <button
+              class="border border-stone-300 px-6 py-2 text-sm text-stone-600 transition hover:border-stone-900 hover:text-stone-900"
+              type="button"
+              :disabled="isCombining"
+              @click="closeCombineDialog"
+            >
+              取消
+            </button>
+            <button
+              class="border border-stone-900 bg-stone-900 px-6 py-2 text-sm text-stone-50 transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:border-stone-300 disabled:bg-stone-200 disabled:text-stone-500"
+              type="button"
+              :disabled="isCombining"
+              @click="submitCombination"
+            >
+              {{ isCombining ? "生成中..." : "生成组合产品" }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- 演化树视图 -->
+  <EvolutionTreeView
+    :seeds="seeds"
+    :is-open="showEvolutionTree"
+    @close="showEvolutionTree = false"
+    @select-seed="handleTreeSelectSeed"
+  />
+
+  <!-- 版本对比 -->
+  <VersionCompare
+    :parent-seed="compareParent"
+    :child-seed="compareChild"
+    :is-open="showVersionCompare"
+    @close="showVersionCompare = false"
+  />
 </template>
+
+<style scoped>
+.dialog-enter-active,
+.dialog-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.dialog-enter-from,
+.dialog-leave-to {
+  opacity: 0;
+}
+
+.float-bar-enter-active,
+.float-bar-leave-active {
+  transition: all 0.3s ease;
+}
+
+.float-bar-enter-from,
+.float-bar-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
+}
+</style>

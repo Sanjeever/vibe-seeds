@@ -1,10 +1,12 @@
 import cors from "cors";
 import express from "express";
 import { z } from "zod";
-import type { ExplorationDimension, SceneType } from "@vibe-seeds/shared";
+import type { ExplorationDimension, SceneType, Seed } from "@vibe-seeds/shared";
 import { validateAiConfigOnStartup } from "./config/env.js";
 import { buildExplorationMeta, generateExploration, streamExplorationContent } from "./services/explorationService.js";
 import { isAiGenerationError, createSeed } from "./services/seedService.js";
+import { evolveSeed } from "./services/evolutionService.js";
+import { combineSeeds } from "./services/combinationService.js";
 import { addSeed, appendExploration, deleteSeed, getSeedById, getSeedByShareId, getSeeds, removeExploration, updateSeedShare } from "./store.js";
 
 const sceneValues = ["indie-tool", "mobile", "chrome-extension", "ai-app"] as const;
@@ -21,6 +23,15 @@ const exploreSchema = z.object({
 }).refine((d) => d.dimension !== "custom" || (!!d.customPrompt && d.customPrompt.length >= 2), {
   message: "自定义追问内容至少需要 2 个字符。",
   path: ["customPrompt"],
+});
+
+const evolveSchema = z.object({
+  evolutionNote: z.string().trim().min(2, "演化说明至少需要 2 个字符。").max(500, "演化说明不能超过 500 个字符。"),
+});
+
+const combineSchema = z.object({
+  seedIds: z.array(z.string()).min(2, "至少需要选择 2 个 seeds").max(3, "最多只能选择 3 个 seeds"),
+  userIntent: z.string().trim().min(2, "侧重点至少需要 2 个字符。").max(500, "侧重点不能超过 500 个字符。").optional(),
 });
 
 const app = express();
@@ -58,6 +69,65 @@ app.post("/api/seeds", async (request, response, next) => {
     const { vibe, scene } = parsed.data;
     const seed = await createSeed(vibe, scene as SceneType | undefined);
     const savedSeed = await addSeed(seed);
+    response.status(201).json(savedSeed);
+  } catch (error) {
+    if (isAiGenerationError(error)) {
+      response.status(502).json({ message: "AI 生成失败，请检查后端环境变量或稍后重试。" });
+      return;
+    }
+
+    next(error);
+  }
+});
+
+app.post("/api/seeds/:id/evolve", async (request, response, next) => {
+  try {
+    const parentSeed = await getSeedById(request.params.id);
+
+    if (!parentSeed) {
+      response.status(404).json({ message: "Seed not found" });
+      return;
+    }
+
+    const parsed = evolveSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ message: parsed.error.issues[0].message });
+      return;
+    }
+
+    const { evolutionNote } = parsed.data;
+    const evolvedSeed = await evolveSeed(parentSeed, evolutionNote);
+    const savedSeed = await addSeed(evolvedSeed);
+    response.status(201).json(savedSeed);
+  } catch (error) {
+    if (isAiGenerationError(error)) {
+      response.status(502).json({ message: "AI 生成失败，请检查后端环境变量或稍后重试。" });
+      return;
+    }
+
+    next(error);
+  }
+});
+
+app.post("/api/seeds/combine", async (request, response, next) => {
+  try {
+    const parsed = combineSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ message: parsed.error.issues[0].message });
+      return;
+    }
+
+    const { seedIds, userIntent } = parsed.data;
+
+    const seeds = await Promise.all(seedIds.map(id => getSeedById(id)));
+    const notFound = seeds.findIndex(s => s === null);
+    if (notFound !== -1) {
+      response.status(404).json({ message: `Seed with id ${seedIds[notFound]} not found` });
+      return;
+    }
+
+    const combinedSeed = await combineSeeds(seeds as Seed[], userIntent);
+    const savedSeed = await addSeed(combinedSeed);
     response.status(201).json(savedSeed);
   } catch (error) {
     if (isAiGenerationError(error)) {

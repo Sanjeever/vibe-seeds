@@ -14,6 +14,8 @@ const emit = defineEmits<{
   remove: [seedId: string];
   explore: [seed: Seed];
   shareUpdated: [seed: Seed];
+  evolve: [seed: Seed];
+  compare: [seed: Seed];
 }>();
 
 const copied = ref(false);
@@ -118,6 +120,27 @@ async function handleExport() {
             {{ mdCopied ? "已复制" : "复制 Markdown" }}
           </button>
 
+          <!-- 演化 -->
+          <button
+            class="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-stone-700 transition hover:bg-stone-50"
+            type="button"
+            @click="closeMenu(); emit('evolve', seed)"
+          >
+            <span class="text-stone-400">🌱</span>
+            演化此想法
+          </button>
+
+          <!-- 对比版本（仅演化版本显示） -->
+          <button
+            v-if="seed.parentId"
+            class="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-stone-700 transition hover:bg-stone-50"
+            type="button"
+            @click="closeMenu(); emit('compare', seed)"
+          >
+            <span class="text-stone-400">⇄</span>
+            对比父版本
+          </button>
+
           <!-- 分享 -->
           <button
             class="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-stone-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:text-stone-400"
@@ -173,6 +196,20 @@ async function handleExport() {
     <div v-if="seed.shareId" class="mt-1 flex items-center gap-1.5">
       <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
       <span class="text-xs text-stone-400">分享已开启</span>
+    </div>
+
+    <!-- 演化关系标记 -->
+    <div v-if="seed.parentId || seed.sourceSeeds" class="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+      <span v-if="seed.parentId" class="flex items-center gap-1.5 border border-stone-300 bg-stone-50 px-2 py-1">
+        <span>↗️</span>
+        <span>第 {{ seed.generation }} 代演化</span>
+      </span>
+      <span v-if="seed.sourceSeeds && seed.sourceSeeds.length > 0" class="flex items-center gap-1.5 border border-stone-300 bg-stone-50 px-2 py-1">
+        <span>🔀</span>
+        <span>融合自 {{ seed.sourceSeeds.length }} 个想法</span>
+      </span>
+      <span v-if="seed.evolutionNote" class="text-stone-400">· {{ seed.evolutionNote }}</span>
+      <span v-if="seed.combinationNote" class="text-stone-400">· {{ seed.combinationNote }}</span>
     </div>
 
     <p class="mt-6 border-l-2 border-stone-900 pl-4 text-base leading-relaxed text-stone-700">

@@ -205,6 +205,11 @@ function normalizeSeed(value: unknown): Seed | null {
   const scene = typeof record.scene === "string" && validScenes.has(record.scene as SceneType) ? (record.scene as SceneType) : undefined;
   const explorations = normalizeExplorations(record.explorations);
   const shareId = typeof record.shareId === "string" && record.shareId.trim() ? record.shareId : undefined;
+  const parentId = typeof record.parentId === "string" && record.parentId.trim() ? record.parentId : undefined;
+  const evolutionNote = typeof record.evolutionNote === "string" && record.evolutionNote.trim() ? record.evolutionNote : undefined;
+  const generation = typeof record.generation === "number" && Number.isFinite(record.generation) ? record.generation : 0;
+  const sourceSeeds = Array.isArray(record.sourceSeeds) ? record.sourceSeeds.filter((s): s is string => typeof s === "string" && s.trim().length > 0) : undefined;
+  const combinationNote = typeof record.combinationNote === "string" && record.combinationNote.trim() ? record.combinationNote : undefined;
 
   return {
     id,
@@ -221,7 +226,12 @@ function normalizeSeed(value: unknown): Seed | null {
     createdAt,
     score: Math.max(1, Math.min(100, Math.round(score))),
     explorations,
-    ...(shareId ? { shareId } : {})
+    generation,
+    ...(shareId ? { shareId } : {}),
+    ...(parentId ? { parentId } : {}),
+    ...(evolutionNote ? { evolutionNote } : {}),
+    ...(sourceSeeds && sourceSeeds.length > 0 ? { sourceSeeds } : {}),
+    ...(combinationNote ? { combinationNote } : {})
   };
 }
 
