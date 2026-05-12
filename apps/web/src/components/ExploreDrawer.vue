@@ -56,8 +56,19 @@ const dimensionLabels: Record<ExplorationDimension, string> = {
   custom: "自定义追问"
 };
 
+const markdownCache = new Map<string, { response: string; html: string }>();
+
 function renderMarkdown(text: string): string {
   return marked.parse(text, { async: false }) as string;
+}
+
+function getRenderedMarkdown(exploration: Exploration): string {
+  const cached = markdownCache.get(exploration.id);
+  if (cached?.response === exploration.response) return cached.html;
+
+  const html = renderMarkdown(exploration.response);
+  markdownCache.set(exploration.id, { response: exploration.response, html });
+  return html;
 }
 
 async function triggerExploration(dimension: ExplorationDimension, customPrompt?: string) {
@@ -149,6 +160,7 @@ async function removeExploration(exploration: Exploration) {
 
   try {
     await deleteExplorationApi(seedId, exploration.id);
+    markdownCache.delete(exploration.id);
     emit("explorationRemoved", seedId, exploration.id);
   } catch {
     errorMessage.value = "删除探索失败，请稍后重试";
@@ -227,11 +239,9 @@ function sortedExplorations(explorations: Exploration[]) {
               >
                 「{{ streamingExploration.prompt }}」
               </p>
-              <!-- eslint-disable-next-line vue/no-v-html -->
-              <div
-                class="prose-sm prose max-w-none text-stone-700"
-                v-html="renderMarkdown(streamingExploration.response)"
-              ></div>
+              <div class="whitespace-pre-wrap break-words text-sm leading-relaxed text-stone-700">
+                {{ streamingExploration.response }}
+              </div>
             </div>
 
             <div
@@ -286,7 +296,7 @@ function sortedExplorations(explorations: Exploration[]) {
                 <!-- eslint-disable-next-line vue/no-v-html -->
                 <div
                   class="prose-sm prose max-w-none text-stone-700"
-                  v-html="renderMarkdown(exploration.response)"
+                  v-html="getRenderedMarkdown(exploration)"
                 ></div>
               </div>
             </div>
