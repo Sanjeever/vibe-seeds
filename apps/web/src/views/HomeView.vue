@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import type { Exploration, Seed, SceneType } from "@vibe-seeds/shared";
+import type { Exploration, Seed, SeedStatus, SceneType } from "@vibe-seeds/shared";
 import { createSeed as createSeedRequest, deleteSeed, fetchSeeds, evolveSeed as evolveSeedRequest, combineSeeds as combineSeedsRequest } from "../api/seeds";
 import ExploreDrawer from "../components/ExploreDrawer.vue";
 import SeedCard from "../components/SeedCard.vue";
 import EvolutionTreeView from "../components/EvolutionTreeView.vue";
 import VersionCompare from "../components/VersionCompare.vue";
 import { getExamplePrompts } from "../constants/example-prompts";
-import { sortSeeds, type SeedSortMode } from "../utils/seeds";
+import { seedStatusOptions, sortSeeds, type SeedSortMode } from "../utils/seeds";
 
 const vibe = ref("");
 const seeds = ref<Seed[]>([]);
@@ -16,6 +16,7 @@ const isCreating = ref(false);
 const errorMessage = ref("");
 const sortMode = ref<SeedSortMode>("createdAt");
 const searchQuery = ref("");
+const selectedStatus = ref<SeedStatus | "all">("all");
 const selectedTags = ref<string[]>([]);
 const selectedScene = ref<SceneType | undefined>(undefined);
 const selectedSeed = ref<Seed | null>(null);
@@ -56,6 +57,14 @@ const allTags = computed(() => {
     .map(([tag, count]) => ({ tag, count }));
 });
 
+const statusCounts = computed<Record<SeedStatus, number>>(() => {
+  const counts = Object.fromEntries(seedStatusOptions.map((option) => [option.value, 0])) as Record<SeedStatus, number>;
+  for (const seed of seeds.value) {
+    counts[seed.status] += 1;
+  }
+  return counts;
+});
+
 const filteredSeeds = computed(() => {
   let result = sortedSeeds.value;
 
@@ -69,6 +78,10 @@ const filteredSeeds = computed(() => {
     );
   }
 
+  if (selectedStatus.value !== "all") {
+    result = result.filter((seed) => seed.status === selectedStatus.value);
+  }
+
   if (selectedTags.value.length > 0) {
     result = result.filter((seed) => selectedTags.value.some((tag) => seed.tags.includes(tag)));
   }
@@ -76,7 +89,7 @@ const filteredSeeds = computed(() => {
   return result;
 });
 
-const isFiltered = computed(() => searchQuery.value.trim() !== "" || selectedTags.value.length > 0);
+const isFiltered = computed(() => searchQuery.value.trim() !== "" || selectedStatus.value !== "all" || selectedTags.value.length > 0);
 
 function toggleTag(tag: string) {
   const idx = selectedTags.value.indexOf(tag);
@@ -89,6 +102,7 @@ function toggleTag(tag: string) {
 
 function clearFilters() {
   searchQuery.value = "";
+  selectedStatus.value = "all";
   selectedTags.value = [];
 }
 
@@ -178,6 +192,13 @@ function handleShareUpdated(updatedSeed: Seed) {
   const index = seeds.value.findIndex((s) => s.id === updatedSeed.id);
   if (index !== -1) {
     seeds.value[index] = { ...seeds.value[index], shareId: updatedSeed.shareId };
+  }
+}
+
+function handleStatusUpdated(updatedSeed: Seed) {
+  const index = seeds.value.findIndex((s) => s.id === updatedSeed.id);
+  if (index !== -1) {
+    seeds.value[index] = updatedSeed;
   }
 }
 
@@ -405,6 +426,36 @@ function handleCompare(seed: Seed) {
             placeholder="搜索项目名、想法、标签..."
             type="search"
           />
+          <div class="flex flex-wrap gap-2">
+            <button
+              class="border px-3 py-1 text-xs transition"
+              :class="
+                selectedStatus === 'all'
+                  ? 'border-stone-900 bg-stone-900 text-stone-50'
+                  : 'border-stone-300 text-stone-600 hover:border-stone-600 hover:text-stone-900'
+              "
+              type="button"
+              @click="selectedStatus = 'all'"
+            >
+              全部
+              <span :class="selectedStatus === 'all' ? 'text-stone-300' : 'text-stone-400'">{{ seeds.length }}</span>
+            </button>
+            <button
+              v-for="option in seedStatusOptions"
+              :key="option.value"
+              class="border px-3 py-1 text-xs transition"
+              :class="
+                selectedStatus === option.value
+                  ? 'border-stone-900 bg-stone-900 text-stone-50'
+                  : 'border-stone-300 text-stone-600 hover:border-stone-600 hover:text-stone-900'
+              "
+              type="button"
+              @click="selectedStatus = option.value"
+            >
+              {{ option.label }}
+              <span :class="selectedStatus === option.value ? 'text-stone-300' : 'text-stone-400'">{{ statusCounts[option.value] }}</span>
+            </button>
+          </div>
           <div v-if="allTags.length > 0" class="flex flex-wrap gap-2">
             <button
               v-for="{ tag, count } in allTags"
@@ -465,6 +516,7 @@ function handleCompare(seed: Seed) {
               @remove="removeSeed"
               @explore="handleExplore"
               @share-updated="handleShareUpdated"
+              @status-updated="handleStatusUpdated"
               @evolve="handleEvolve"
               @compare="handleCompare"
             />

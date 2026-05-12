@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, h, defineComponent, type PropType } from "vue";
 import type { Seed } from "@vibe-seeds/shared";
-import { formatSeedTime } from "../utils/seeds";
+import { formatSeedTime, getSeedStatusClass, getSeedStatusLabel } from "../utils/seeds";
 
 const props = defineProps<{
   seeds: Seed[];
@@ -80,7 +80,8 @@ const TreeNodeComponent: any = defineComponent({
           h('div', { class: 'flex-1' }, [
             h('div', { class: 'flex items-center gap-2' }, [
               h('span', { class: 'text-xs text-stone-400' }, formatSeedTime(props.node.seed.createdAt)),
-              h('span', { class: 'border border-stone-300 px-2 py-0.5 text-xs text-stone-600' }, getGenerationLabel(props.node.seed.generation))
+              h('span', { class: 'border border-stone-300 px-2 py-0.5 text-xs text-stone-600' }, getGenerationLabel(props.node.seed.generation)),
+              h('span', { class: ['border px-2 py-0.5 text-xs', getSeedStatusClass(props.node.seed.status)] }, getSeedStatusLabel(props.node.seed.status))
             ]),
             h('p', { class: 'mt-2 font-medium text-stone-900' }, props.node.seed.projectName),
             h('p', { class: 'mt-1 text-sm text-stone-600 line-clamp-2' }, props.node.seed.concept),
@@ -152,7 +153,10 @@ const TreeNodeComponent: any = defineComponent({
                         class="min-w-[200px] flex-1 cursor-pointer border border-stone-300 bg-stone-50 p-4 transition hover:border-stone-900"
                         @click="emit('selectSeed', source.id)"
                       >
-                        <p class="text-xs text-stone-400">{{ formatSeedTime(source.createdAt) }}</p>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <p class="text-xs text-stone-400">{{ formatSeedTime(source.createdAt) }}</p>
+                          <span class="border px-2 py-0.5 text-xs" :class="getSeedStatusClass(source.status)">{{ getSeedStatusLabel(source.status) }}</span>
+                        </div>
                         <p class="mt-1 font-medium text-stone-900">{{ source.projectName }}</p>
                         <div class="mt-2 flex flex-wrap gap-1">
                           <span v-for="tag in source.tags.slice(0, 3)" :key="tag" class="text-xs text-stone-500">#{{ tag }}</span>
@@ -172,7 +176,10 @@ const TreeNodeComponent: any = defineComponent({
                       class="mt-6 cursor-pointer border-2 border-stone-900 bg-white p-6 transition hover:bg-stone-50"
                       @click="emit('selectSeed', group.combined.id)"
                     >
-                      <p class="text-xs text-stone-400">{{ formatSeedTime(group.combined.createdAt) }}</p>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <p class="text-xs text-stone-400">{{ formatSeedTime(group.combined.createdAt) }}</p>
+                        <span class="border px-2 py-0.5 text-xs" :class="getSeedStatusClass(group.combined.status)">{{ getSeedStatusLabel(group.combined.status) }}</span>
+                      </div>
                       <p class="mt-2 text-xl font-light text-stone-900">{{ group.combined.projectName }}</p>
                       <p class="mt-2 text-sm text-stone-600">{{ group.combined.concept }}</p>
                       <div class="mt-3 flex flex-wrap gap-2">

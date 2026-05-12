@@ -38,6 +38,7 @@ export function createFallbackSeedFromVibe(vibe: string): Seed {
     followUpPrompt: createFollowUpPrompt(normalizedVibe, projectName),
     tags,
     score: calculateSeedScore(normalizedVibe),
+    status: "draft",
     source: "fallback",
     sourceVibe: normalizedVibe,
     createdAt,

@@ -32,6 +32,7 @@ function createSeedFromDraft(vibe: string, draft: SeedDraft, scene?: SceneType):
     followUpPrompt: draft.followUpPrompt,
     tags: draft.tags,
     score: calculateSeedScore(vibe),
+    status: "draft",
     source: "ai",
     scene,
     sourceVibe: vibe,

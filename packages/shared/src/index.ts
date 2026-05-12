@@ -2,6 +2,10 @@ export type ExplorationDimension = "mvp" | "tech" | "competitor" | "validation" 
 
 export type SceneType = "indie-tool" | "mobile" | "chrome-extension" | "ai-app";
 
+export const seedStatusValues = ["draft", "candidate", "to-validate", "validated", "abandoned"] as const;
+
+export type SeedStatus = (typeof seedStatusValues)[number];
+
 export interface Exploration {
   id: string;
   dimension: ExplorationDimension;
@@ -20,6 +24,7 @@ export interface Seed {
   followUpPrompt: string;
   tags: string[];
   score: number;
+  status: SeedStatus;
   source?: "ai" | "fallback";
   scene?: SceneType;
   sourceVibe: string;

@@ -1,13 +1,13 @@
 import cors from "cors";
 import express from "express";
 import { z } from "zod";
-import type { ExplorationDimension, SceneType, Seed } from "@vibe-seeds/shared";
+import { seedStatusValues, type ExplorationDimension, type SceneType, type Seed } from "@vibe-seeds/shared";
 import { validateAiConfigOnStartup } from "./config/env.js";
 import { buildExplorationMeta, generateExploration, streamExplorationContent } from "./services/explorationService.js";
 import { isAiGenerationError, createSeed } from "./services/seedService.js";
 import { evolveSeed } from "./services/evolutionService.js";
 import { combineSeeds } from "./services/combinationService.js";
-import { addSeed, appendExploration, deleteSeed, getSeedById, getSeedByShareId, getSeeds, removeExploration, updateSeedShare } from "./store.js";
+import { addSeed, appendExploration, deleteSeed, getSeedById, getSeedByShareId, getSeeds, removeExploration, updateSeedShare, updateSeedStatus } from "./store.js";
 
 const sceneValues = ["indie-tool", "mobile", "chrome-extension", "ai-app"] as const;
 const dimensionValues = ["mvp", "tech", "competitor", "validation", "custom"] as const;
@@ -32,6 +32,10 @@ const evolveSchema = z.object({
 const combineSchema = z.object({
   seedIds: z.array(z.string()).min(2, "至少需要选择 2 个 seeds").max(3, "最多只能选择 3 个 seeds"),
   userIntent: z.string().trim().min(2, "侧重点至少需要 2 个字符。").max(500, "侧重点不能超过 500 个字符。").optional(),
+});
+
+const statusSchema = z.object({
+  status: z.enum(seedStatusValues),
 });
 
 const app = express();
@@ -139,6 +143,25 @@ app.post("/api/seeds/combine", async (request, response, next) => {
   }
 });
 
+app.patch("/api/seeds/:id/status", async (request, response, next) => {
+  try {
+    const parsed = statusSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ message: parsed.error.issues[0].message });
+      return;
+    }
+
+    const updated = await updateSeedStatus(request.params.id, parsed.data.status);
+    if (!updated) {
+      response.status(404).json({ message: "Seed not found" });
+      return;
+    }
+
+    response.json(updated);
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.post("/api/seeds/:id/explore", async (request, response, next) => {
   try {

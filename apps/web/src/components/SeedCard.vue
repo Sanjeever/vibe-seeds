@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import type { Seed } from "@vibe-seeds/shared";
-import { disableShare, enableShare } from "../api/seeds";
+import type { Seed, SeedStatus } from "@vibe-seeds/shared";
+import { disableShare, enableShare, updateSeedStatus } from "../api/seeds";
 import { exportAsPng } from "../utils/export";
 import { seedToMarkdown } from "../utils/markdown";
-import { formatSeedTime, normalizeScore } from "../utils/seeds";
+import { formatSeedTime, getSeedStatusClass, normalizeScore, seedStatusOptions } from "../utils/seeds";
 
 const props = defineProps<{
   seed: Seed;
@@ -14,6 +14,7 @@ const emit = defineEmits<{
   remove: [seedId: string];
   explore: [seed: Seed];
   shareUpdated: [seed: Seed];
+  statusUpdated: [seed: Seed];
   evolve: [seed: Seed];
   compare: [seed: Seed];
 }>();
@@ -23,6 +24,7 @@ const menuOpen = ref(false);
 const mdCopied = ref(false);
 const linkCopied = ref(false);
 const sharingLoading = ref(false);
+const statusLoading = ref(false);
 const exportLoading = ref(false);
 const exportCardRef = ref<HTMLElement>();
 
@@ -82,6 +84,21 @@ async function handleExport() {
     exportLoading.value = false;
   }
 }
+
+async function handleStatusChange(event: Event) {
+  const status = (event.target as HTMLSelectElement).value as SeedStatus;
+  if (status === props.seed.status) return;
+
+  statusLoading.value = true;
+  try {
+    const updated = await updateSeedStatus(props.seed.id, status);
+    emit("statusUpdated", updated);
+  } catch (error) {
+    console.error("Seed status update failed:", error);
+  } finally {
+    statusLoading.value = false;
+  }
+}
 </script>
 
 <template>
@@ -91,7 +108,21 @@ async function handleExport() {
   <article class="group border border-stone-200 bg-white p-8 transition hover:border-stone-900">
     <div class="flex items-start justify-between gap-4">
       <div class="flex-1">
-        <p class="text-xs uppercase tracking-wider text-stone-400">{{ formatSeedTime(seed.createdAt) }}</p>
+        <div class="flex flex-wrap items-center gap-2">
+          <p class="text-xs uppercase tracking-wider text-stone-400">{{ formatSeedTime(seed.createdAt) }}</p>
+          <select
+            class="border px-2 py-0.5 text-xs outline-none transition disabled:cursor-not-allowed disabled:opacity-60"
+            :class="getSeedStatusClass(seed.status)"
+            :value="seed.status"
+            :disabled="statusLoading"
+            @click.stop
+            @change="handleStatusChange"
+          >
+            <option v-for="option in seedStatusOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
         <h3 class="font-display mt-3 text-2xl font-light text-stone-900">{{ seed.projectName }}</h3>
       </div>
 

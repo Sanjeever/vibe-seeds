@@ -1,4 +1,4 @@
-import type { Exploration, ExplorationDimension, Seed, SceneType } from "@vibe-seeds/shared";
+import type { Exploration, ExplorationDimension, Seed, SeedStatus, SceneType } from "@vibe-seeds/shared";
 
 interface ErrorPayload {
   message?: string;
@@ -180,6 +180,22 @@ export async function combineSeeds(seedIds: string[], userIntent?: string) {
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, "组合生成失败"));
+  }
+
+  return (await response.json()) as Seed;
+}
+
+export async function updateSeedStatus(seedId: string, status: SeedStatus) {
+  const response = await fetch(`/api/seeds/${seedId}/status`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ status })
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "更新状态失败"));
   }
 
   return (await response.json()) as Seed;

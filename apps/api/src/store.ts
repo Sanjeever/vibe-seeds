@@ -1,5 +1,5 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import type { Exploration, Seed, SceneType } from "@vibe-seeds/shared";
+import { seedStatusValues, type Exploration, type Seed, type SeedStatus, type SceneType } from "@vibe-seeds/shared";
 import { dataDir, seedsPath } from "./config/paths.js";
 import { calculateSeedScore } from "./utils/score.js";
 
@@ -94,6 +94,21 @@ export async function updateSeedShare(id: string, shareId: string | null): Promi
       updated.shareId = shareId;
     }
 
+    seeds[index] = updated;
+    await writeSeedsFile(seeds);
+    seedsCache = seeds;
+    return updated;
+  });
+}
+
+export async function updateSeedStatus(id: string, status: SeedStatus): Promise<Seed | null> {
+  return withWriteLock(async () => {
+    const seeds = await readSeedsFile();
+    const index = seeds.findIndex((seed) => seed.id === id);
+
+    if (index === -1) return null;
+
+    const updated = { ...seeds[index], status };
     seeds[index] = updated;
     await writeSeedsFile(seeds);
     seedsCache = seeds;
@@ -201,6 +216,7 @@ function normalizeSeed(value: unknown): Seed | null {
   const rawScore = record.score;
   const score = typeof rawScore === "number" && Number.isFinite(rawScore) ? rawScore : calculateSeedScore(sourceVibe);
   const source = record.source === "ai" || record.source === "fallback" ? record.source : undefined;
+  const status = normalizeSeedStatus(record.status);
   const validScenes = new Set<SceneType>(["indie-tool", "mobile", "chrome-extension", "ai-app"]);
   const scene = typeof record.scene === "string" && validScenes.has(record.scene as SceneType) ? (record.scene as SceneType) : undefined;
   const explorations = normalizeExplorations(record.explorations);
@@ -225,6 +241,7 @@ function normalizeSeed(value: unknown): Seed | null {
     sourceVibe,
     createdAt,
     score: Math.max(1, Math.min(100, Math.round(score))),
+    status,
     explorations,
     generation,
     ...(shareId ? { shareId } : {}),
@@ -233,6 +250,10 @@ function normalizeSeed(value: unknown): Seed | null {
     ...(sourceSeeds && sourceSeeds.length > 0 ? { sourceSeeds } : {}),
     ...(combinationNote ? { combinationNote } : {})
   };
+}
+
+function normalizeSeedStatus(value: unknown): SeedStatus {
+  return typeof value === "string" && seedStatusValues.includes(value as SeedStatus) ? (value as SeedStatus) : "draft";
 }
 
 function readString(record: Record<string, unknown>, key: string): string | null {
